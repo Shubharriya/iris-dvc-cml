@@ -1,0 +1,9 @@
+# All tunable values live here. DVC tracks them: changing one re-runs only the stages that use it.
+prepare:
+  test_size: 0.3        # fraction of the data held out for testing
+  random_state: 42      # makes the split reproducible
+
+train:
+  n_estimators: 10      # number of trees in the random forest
+  max_depth: 2          # maximum depth of each tree
+  random_state: 42

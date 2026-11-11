@@ -1,0 +1,84 @@
+# Part (e): on every pull request into main, reproduce the DVC pipeline from scratch
+# and post a metrics / params comparison against main as a PR comment (via CML).
+name: CML experiment report
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write       # lets CML post the comment on the PR
+
+jobs:
+  reproduce-and-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code (full history, so main can be compared)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Set up CML
+        uses: iterative/setup-cml@v2
+
+      - name: Install dependencies (includes DVC)
+        run: pip install -r requirements.txt
+
+      - name: Get the dataset
+        # Uses the DVC remote if CI can reach it. A local-folder remote is not reachable from
+        # GitHub's servers, so the file is regenerated instead, and its MD5 is checked against
+        # the hash DVC recorded in data/raw/iris.csv.dvc (the job fails if they differ).
+        # For a cloud remote (S3, DagsHub, Google Drive), add its credentials as repository
+        # secrets and pass them here as environment variables.
+        run: |
+          dvc pull data/raw/iris.csv.dvc || {
+            echo "DVC remote not reachable from CI - regenerating the dataset";
+            python src/download_data.py;
+          }
+          expected=$(grep 'md5:' data/raw/iris.csv.dvc | awk '{print $3}')
+          actual=$(md5sum data/raw/iris.csv | cut -d' ' -f1)
+          echo "expected md5 $expected, got $actual"
+          test "$expected" = "$actual"
+
+      - name: Reproduce the pipeline from scratch
+        run: dvc repro --force      # re-run every stage, even if outputs look up to date
+
+      - name: Check the PR's committed metrics are reproduced
+        run: |
+          if git diff --quiet -- metrics.json; then
+            echo "REPRO_STATUS=✅ Metrics reproduced exactly from the committed code, data and parameters." >> "$GITHUB_ENV"
+          else
+            git diff -- metrics.json
+            echo "REPRO_STATUS=⚠️ Reproduced metrics differ from the committed metrics.json." >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the report and comment on the PR
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "## 🔁 Reproduced experiment"
+            echo
+            echo "$REPRO_STATUS"
+            echo
+            echo "### Metrics (this PR vs main)"
+            dvc metrics diff origin/main --all --md
+            echo
+            echo "### Parameters changed"
+            dvc params diff origin/main --md
+            echo
+            echo "### Confusion matrix (this PR)"
+            echo "![](./confusion_matrix.png)"
+            echo
+            echo "### Pipeline"
+            dvc dag --md
+          } > report.md
+          cat report.md
+          cml comment create report.md

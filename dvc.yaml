@@ -1,0 +1,36 @@
+stages:
+  prepare:
+    cmd: python src/prepare.py
+    deps:
+      - src/prepare.py
+      - data/raw/iris.csv
+    params:
+      - prepare.test_size
+      - prepare.random_state
+    outs:
+      - data/prepared
+
+  train:
+    cmd: python src/train.py
+    deps:
+      - src/train.py
+      - data/prepared/train.csv
+    params:
+      - train.n_estimators
+      - train.max_depth
+      - train.random_state
+    outs:
+      - models/model.pkl
+
+  evaluate:
+    cmd: python src/evaluate.py
+    deps:
+      - src/evaluate.py
+      - models/model.pkl
+      - data/prepared/test.csv
+    metrics:
+      - metrics.json:
+          cache: false        # committed to Git so `dvc metrics diff main` can compare branches
+    plots:
+      - confusion_matrix.png:
+          cache: false
