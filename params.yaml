@@ -4,6 +4,6 @@ prepare:
   random_state: 42      # makes the split reproducible
 
 train:
-  n_estimators: 10      # number of trees in the random forest
-  max_depth: 2          # maximum depth of each tree
+  n_estimators: 50      # number of trees in the random forest
+  max_depth: 4          # maximum depth of each tree
   random_state: 42
