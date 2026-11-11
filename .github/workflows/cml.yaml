@@ -75,7 +75,7 @@ jobs:
             dvc params diff origin/main --md
             echo
             echo "### Confusion matrix (this PR)"
-            echo "![](./confusion_matrix.png)"
+            echo "![](https://raw.githubusercontent.com/${{ github.repository }}/${{ github.event.pull_request.head.sha }}/confusion_matrix.png)"
             echo
             echo "### Pipeline"
             dvc dag --md
